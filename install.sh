@@ -10,6 +10,8 @@ BIN_NAME=rm-support-http
 SCRIPT_NAME=rm-support.sh
 KEEP_INSTALL=${KEEP_INSTALL:-0}
 server_pid=""
+stop_server_on_exit=1
+cleanup_files_on_exit=1
 install_dir=""
 dir_created=0
 installed_script=""
@@ -18,13 +20,13 @@ installed_bin=""
 tmpdir="$(mktemp -d /tmp/rm-support-install.XXXXXX)"
 
 cleanup() {
-  if [ -n "$server_pid" ]; then
+  if [ "$stop_server_on_exit" = "1" ] && [ -n "$server_pid" ]; then
     if kill -0 "$server_pid" 2>/dev/null; then
       kill "$server_pid" 2>/dev/null || true
       wait "$server_pid" 2>/dev/null || true
     fi
   fi
-  if [ "${KEEP_INSTALL}" = "0" ]; then
+  if [ "$cleanup_files_on_exit" = "1" ] && [ "${KEEP_INSTALL}" = "0" ]; then
     if [ -n "$installed_script" ]; then
       rm -f "$installed_script"
     fi
@@ -109,7 +111,11 @@ cat "${tmpdir}/http.log"
 find_ip() {
   for iface in ${RM_HTTP_IFACES:-usb0 wlan0 eth0}; do
     if ip -4 addr show "$iface" >/dev/null 2>&1; then
-      ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1
+      addr="$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)"
+      if [ -n "$addr" ]; then
+        echo "$addr"
+        return
+      fi
     fi
   done
   ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {print $2}' | cut -d/ -f1 | head -n1
@@ -138,8 +144,11 @@ base_url="$(suggest_url)"
 
 echo ""
 echo "===================="
-echo "Download URL (bundle): ${base_url}/download/${bundle_name}"
-echo "Download URL (latest): ${base_url}/download/latest"
+echo "Download this file:"
+echo "  ${base_url}/download/${bundle_name}"
+echo ""
+echo "Need the newest bundle automatically?"
+echo "  ${base_url}/download/latest"
 echo "===================="
 
 echo ""
@@ -147,13 +156,17 @@ echo "Press Enter after the download completes to stop the server and clean up."
 if [ -r /dev/tty ] && [ -w /dev/tty ]; then
   read _ </dev/tty || true
 else
-  echo "[INFO] No interactive terminal detected. Leave this running and press Ctrl+C when finished."
-  if wait "$server_pid" 2>/dev/null; then
-    server_pid=""
-  fi
+  echo "[INFO] No interactive terminal detected."
+  echo "[INFO] The HTTP server will keep running in the background."
+  echo "[INFO] Stop it later with:"
+  echo "       kill ${server_pid}"
+  echo "[INFO] Cleanup skipped so the download stays available."
+  stop_server_on_exit=0
+  cleanup_files_on_exit=0
+  KEEP_INSTALL=1
 fi
 
-if [ -n "$server_pid" ]; then
+if [ "$stop_server_on_exit" = "1" ] && [ -n "$server_pid" ]; then
   if kill -0 "$server_pid" 2>/dev/null; then
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
@@ -161,7 +174,7 @@ if [ -n "$server_pid" ]; then
   server_pid=""
 fi
 
-if [ "${KEEP_INSTALL}" = "0" ]; then
+if [ "$cleanup_files_on_exit" = "1" ] && [ "${KEEP_INSTALL}" = "0" ]; then
   if [ -n "$installed_script" ]; then
     rm -f "$installed_script"
   fi

@@ -18,7 +18,7 @@ The installer:
 
 - downloads `rm-support.sh` and `rm-support-http`
 - runs `rm-support.sh`, producing `rm-debug-*.tgz`
-- starts the HTTP server and prints a single clear download URL
+- starts the HTTP server and prints one highlighted download link (plus an optional "latest" link)
 - waits for you to press Enter, then stops the server and removes the temporary files
 
 Helpful environment variables:
@@ -30,7 +30,7 @@ Helpful environment variables:
 - `INSTALL_DIR` -- force a specific working directory instead of a new temp folder
 - `KEEP_INSTALL=1` -- skip cleanup so the downloaded files remain on disk
 
-When no interactive terminal is available (for example `ssh root@host 'wget ... | sh'` without `-t`), the script keeps the server alive and waits for `Ctrl+C`.
+When no interactive terminal is available (for example `ssh root@host 'wget ... | sh'` without `-t`), the script leaves the HTTP server running in the background and prints a `kill <pid>` command you can run later (or just reboot) once the download is complete.
 
 ## Manual usage
 
