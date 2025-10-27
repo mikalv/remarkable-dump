@@ -8,7 +8,7 @@ Utilities for collecting diagnostic data from a reMarkable tablet and (optionall
 
 ## One-shot usage
 
-Run the command below as `root` on the reMarkable (for example via `ssh root@10.11.99.1 'wget ... | sh'`):
+Run the command below as `root` on the reMarkable (for example via `ssh -tt root@10.11.99.1 'wget ... | sh'` to get an interactive prompt):
 
 ```sh
 wget https://raw.githubusercontent.com/mikalv/remarkable-dump/main/install.sh -O- | sh
@@ -18,7 +18,7 @@ The installer:
 
 - downloads `rm-support.sh` and `rm-support-http`
 - runs `rm-support.sh`, producing `rm-debug-*.tgz`
-- starts the HTTP server and prints the recommended download URL
+- starts the HTTP server and prints a single clear download URL
 - waits for you to press Enter, then stops the server and removes the temporary files
 
 Helpful environment variables:
@@ -29,6 +29,8 @@ Helpful environment variables:
 - `RM_HTTP_IFACES` -- interface names to probe for an IPv4 address suggestion (`usb0 wlan0 eth0`)
 - `INSTALL_DIR` -- force a specific working directory instead of a new temp folder
 - `KEEP_INSTALL=1` -- skip cleanup so the downloaded files remain on disk
+
+When no interactive terminal is available (for example `ssh root@host 'wget ... | sh'` without `-t`), the script keeps the server alive and waits for `Ctrl+C`.
 
 ## Manual usage
 

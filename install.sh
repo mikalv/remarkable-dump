@@ -123,16 +123,35 @@ port="${rm_http_bind##*:}"
 echo ""
 echo "[OK] Support bundle ready: ${bundle_path}"
 echo "[INFO] Stored in: ${bundle_dir}"
-if [ -n "${device_ip}" ]; then
-  echo "[INFO] Download URL: http://${device_ip}:${port}/download/${bundle_name}"
-  echo "       or http://${device_ip}:${port}/download/latest"
-else
-  echo "[INFO] Server listening on ${rm_http_bind} -- use the device IP address."
-fi
+
+suggest_url() {
+  if [ -n "${device_ip}" ]; then
+    printf '%s' "http://${device_ip}:${port}"
+  elif [ "${rm_http_bind}" = "0.0.0.0:${port}" ]; then
+    printf '%s' "http://<device-ip>:${port}"
+  else
+    printf '%s' "http://${rm_http_bind}"
+  fi
+}
+
+base_url="$(suggest_url)"
+
+echo ""
+echo "===================="
+echo "Download URL (bundle): ${base_url}/download/${bundle_name}"
+echo "Download URL (latest): ${base_url}/download/latest"
+echo "===================="
 
 echo ""
 echo "Press Enter after the download completes to stop the server and clean up."
-read _ || true
+if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+  read _ </dev/tty || true
+else
+  echo "[INFO] No interactive terminal detected. Leave this running and press Ctrl+C when finished."
+  if wait "$server_pid" 2>/dev/null; then
+    server_pid=""
+  fi
+fi
 
 if [ -n "$server_pid" ]; then
   if kill -0 "$server_pid" 2>/dev/null; then
