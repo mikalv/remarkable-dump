@@ -19,7 +19,7 @@ The installer:
 - downloads `rm-support.sh` and `rm-support-http`
 - runs `rm-support.sh`, producing `rm-debug-*.tgz`
 - starts the HTTP server and prints one highlighted download link (plus an optional "latest" link)
-- waits for you to press Enter, then stops the server and removes the temporary files
+- keeps the HTTP server alive for a short window, then stops it and removes the temporary files automatically
 
 Helpful environment variables:
 
@@ -29,9 +29,11 @@ Helpful environment variables:
 - `RM_HTTP_IFACES` -- interface names to probe for an IPv4 address suggestion (`usb0 wlan0 eth0`)
 - `INSTALL_DIR` -- force a specific working directory instead of a new temp folder
 - `KEEP_INSTALL=1` -- skip cleanup so the downloaded files remain on disk
-- `USB_DOWNLOAD_HOST` -- fallback host used for the printed URL when no interface IP is detected (default `10.11.99.1`)
+- `USB_DOWNLOAD_HOST` -- primary host used in the printed URL (default `10.11.99.1`)
+- `PREFER_DEVICE_IP=1` -- prefer the detected interface IP over `USB_DOWNLOAD_HOST` in the URL
+- `SCRUB_TIMEOUT` -- seconds to keep the HTTP server alive before automatic cleanup (default `300`)
 
-When no interactive terminal is available (for example `ssh root@host 'wget ... | sh'` without `-t`), the script leaves the HTTP server running in the background and prints a `kill <pid>` command you can run later (or just reboot) once the download is complete.
+After printing the download link the script keeps the HTTP server running for `SCRUB_TIMEOUT` seconds (5 minutes by default) before shutting it down and cleaning up. You can stop it early with `Ctrl+C` or `kill <pid>`. Without an interactive terminal the countdown still runs, so simply fetch the bundle and wait for the timeout (or power-cycle the device to stop it sooner).
 
 ## Manual usage
 

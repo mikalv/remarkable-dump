@@ -9,10 +9,11 @@ RAW_BASE=${RAW_BASE:-https://raw.githubusercontent.com/mikalv/remarkable-dump/ma
 BIN_NAME=rm-support-http
 SCRIPT_NAME=rm-support.sh
 KEEP_INSTALL=${KEEP_INSTALL:-0}
+SCRUB_TIMEOUT=${SCRUB_TIMEOUT:-300}
 USB_DOWNLOAD_HOST=${USB_DOWNLOAD_HOST:-10.11.99.1}
+PREFER_DEVICE_IP=${PREFER_DEVICE_IP:-0}
 server_pid=""
-stop_server_on_exit=1
-cleanup_files_on_exit=1
+timer_pid=""
 install_dir=""
 dir_created=0
 installed_script=""
@@ -21,13 +22,17 @@ installed_bin=""
 tmpdir="$(mktemp -d /tmp/rm-support-install.XXXXXX)"
 
 cleanup() {
-  if [ "$stop_server_on_exit" = "1" ] && [ -n "$server_pid" ]; then
+  if [ -n "$timer_pid" ]; then
+    kill "$timer_pid" 2>/dev/null || true
+    wait "$timer_pid" 2>/dev/null || true
+  fi
+  if [ -n "$server_pid" ]; then
     if kill -0 "$server_pid" 2>/dev/null; then
       kill "$server_pid" 2>/dev/null || true
       wait "$server_pid" 2>/dev/null || true
     fi
   fi
-  if [ "$cleanup_files_on_exit" = "1" ] && [ "${KEEP_INSTALL}" = "0" ]; then
+  if [ "${KEEP_INSTALL}" = "0" ]; then
     if [ -n "$installed_script" ]; then
       rm -f "$installed_script"
     fi
@@ -37,6 +42,9 @@ cleanup() {
     if [ "$dir_created" = "1" ] && [ -n "$install_dir" ]; then
       rmdir "$install_dir" 2>/dev/null || true
     fi
+    echo "[INFO] Removed temporary files."
+  else
+    echo "[INFO] Keeping files in ${install_dir} (KEEP_INSTALL=${KEEP_INSTALL})."
   fi
   rm -rf "$tmpdir"
 }
@@ -132,19 +140,26 @@ echo ""
 echo "[OK] Support bundle ready: ${bundle_path}"
 echo "[INFO] Stored in: ${bundle_dir}"
 
-suggest_url() {
-  host="${device_ip}"
-  if [ -z "$host" ]; then
-    if [ "${rm_http_bind}" = "0.0.0.0:${port}" ] || [ "${rm_http_bind}" = "[::]:${port}" ]; then
-      host="${USB_DOWNLOAD_HOST}"
-    else
-      host="${rm_http_bind%:*}"
+download_host="${USB_DOWNLOAD_HOST}"
+alt_host=""
+if [ -n "${device_ip}" ]; then
+  if [ "${PREFER_DEVICE_IP}" = "1" ]; then
+    download_host="${device_ip}"
+    if [ "${device_ip}" != "${USB_DOWNLOAD_HOST}" ]; then
+      alt_host="${USB_DOWNLOAD_HOST}"
     fi
+  else
+    alt_host="${device_ip}"
   fi
-  printf 'http://%s:%s' "$host" "$port"
-}
+fi
 
-base_url="$(suggest_url)"
+# If we bound to a specific address (not 0.0.0.0) and matches neither host, use that as download host.
+bind_host="${rm_http_bind%:*}"
+if [ "${rm_http_bind}" != "0.0.0.0:${port}" ] && [ "${rm_http_bind}" != "[::]:${port}" ]; then
+  download_host="${bind_host}"
+fi
+
+base_url="http://${download_host}:${port}"
 
 echo ""
 echo "===================="
@@ -155,54 +170,24 @@ echo "Need the newest bundle automatically?"
 echo "  ${base_url}/download/latest"
 echo "===================="
 
+if [ -n "${alt_host}" ] && [ "${alt_host}" != "${download_host}" ]; then
+  echo ""
+  echo "Alternate URL (if USB/RNDIS is unreachable):"
+  echo "  http://${alt_host}:${port}/download/${bundle_name}"
+fi
+
 echo ""
-echo "Press Enter after the download completes to stop the server and clean up."
-if [ -r /dev/tty ] && [ -w /dev/tty ]; then
-  if read _ </dev/tty; then
-    :
-  else
-    echo "[INFO] No interactive terminal detected."
-    echo "[INFO] The HTTP server will keep running in the background."
-    echo "[INFO] Stop it later with:"
-    echo "       kill ${server_pid}"
-    echo "[INFO] Cleanup skipped so the download stays available."
-    stop_server_on_exit=0
-    cleanup_files_on_exit=0
-    KEEP_INSTALL=1
-  fi
-else
-  echo "[INFO] No interactive terminal detected."
-  echo "[INFO] The HTTP server will keep running in the background."
-  echo "[INFO] Stop it later with:"
-  echo "       kill ${server_pid}"
-  echo "[INFO] Cleanup skipped so the download stays available."
-  stop_server_on_exit=0
-  cleanup_files_on_exit=0
-  KEEP_INSTALL=1
-fi
 
-if [ "$stop_server_on_exit" = "1" ] && [ -n "$server_pid" ]; then
-  if kill -0 "$server_pid" 2>/dev/null; then
-    kill "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
-  fi
-  server_pid=""
-fi
-
-if [ "$cleanup_files_on_exit" = "1" ] && [ "${KEEP_INSTALL}" = "0" ]; then
-  if [ -n "$installed_script" ]; then
-    rm -f "$installed_script"
-  fi
-  if [ -n "$installed_bin" ]; then
-    rm -f "$installed_bin"
-  fi
-  if [ "${dir_created}" = "1" ]; then
-    rmdir "${install_dir}" 2>/dev/null || true
-  fi
-  echo "[INFO] Removed temporary files."
+echo "[INFO] Server will stay up for ${SCRUB_TIMEOUT} seconds."
+echo "[INFO] Press Ctrl+C to stop immediately (or run: kill ${server_pid})."
+sleep "${SCRUB_TIMEOUT}" &
+timer_pid=$!
+if wait "${timer_pid}" 2>/dev/null; then
+  echo "[INFO] ${SCRUB_TIMEOUT} seconds elapsed. Cleaning up..."
 else
-  echo "[INFO] Keeping files in ${install_dir} (KEEP_INSTALL=${KEEP_INSTALL})."
+  echo "[INFO] Stopping server..."
 fi
+timer_pid=""
 
 echo ""
 echo "Done."
