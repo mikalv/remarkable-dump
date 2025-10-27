@@ -29,6 +29,7 @@ Helpful environment variables:
 - `RM_HTTP_IFACES` -- interface names to probe for an IPv4 address suggestion (`usb0 wlan0 eth0`)
 - `INSTALL_DIR` -- force a specific working directory instead of a new temp folder
 - `KEEP_INSTALL=1` -- skip cleanup so the downloaded files remain on disk
+- `USB_DOWNLOAD_HOST` -- fallback host used for the printed URL when no interface IP is detected (default `10.11.99.1`)
 
 When no interactive terminal is available (for example `ssh root@host 'wget ... | sh'` without `-t`), the script leaves the HTTP server running in the background and prints a `kill <pid>` command you can run later (or just reboot) once the download is complete.
 

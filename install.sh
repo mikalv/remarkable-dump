@@ -9,6 +9,7 @@ RAW_BASE=${RAW_BASE:-https://raw.githubusercontent.com/mikalv/remarkable-dump/ma
 BIN_NAME=rm-support-http
 SCRIPT_NAME=rm-support.sh
 KEEP_INSTALL=${KEEP_INSTALL:-0}
+USB_DOWNLOAD_HOST=${USB_DOWNLOAD_HOST:-10.11.99.1}
 server_pid=""
 stop_server_on_exit=1
 cleanup_files_on_exit=1
@@ -111,17 +112,18 @@ cat "${tmpdir}/http.log"
 find_ip() {
   for iface in ${RM_HTTP_IFACES:-usb0 wlan0 eth0}; do
     if ip -4 addr show "$iface" >/dev/null 2>&1; then
-      addr="$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)"
+      addr="$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet /{print $2}' | head -n1 | cut -d/ -f1)"
       if [ -n "$addr" ]; then
         echo "$addr"
         return
       fi
     fi
   done
-  ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {print $2}' | cut -d/ -f1 | head -n1
+  ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {print $2}' | head -n1 | cut -d/ -f1
 }
 
 device_ip="$(find_ip)"
+device_ip="$(printf '%s' "${device_ip}" | tr -d '\r' | head -n1)"
 bundle_name="$(basename "${bundle_path}")"
 bundle_dir="$(dirname "${bundle_path}")"
 port="${rm_http_bind##*:}"
@@ -131,13 +133,15 @@ echo "[OK] Support bundle ready: ${bundle_path}"
 echo "[INFO] Stored in: ${bundle_dir}"
 
 suggest_url() {
-  if [ -n "${device_ip}" ]; then
-    printf '%s' "http://${device_ip}:${port}"
-  elif [ "${rm_http_bind}" = "0.0.0.0:${port}" ]; then
-    printf '%s' "http://<device-ip>:${port}"
-  else
-    printf '%s' "http://${rm_http_bind}"
+  host="${device_ip}"
+  if [ -z "$host" ]; then
+    if [ "${rm_http_bind}" = "0.0.0.0:${port}" ] || [ "${rm_http_bind}" = "[::]:${port}" ]; then
+      host="${USB_DOWNLOAD_HOST}"
+    else
+      host="${rm_http_bind%:*}"
+    fi
   fi
+  printf 'http://%s:%s' "$host" "$port"
 }
 
 base_url="$(suggest_url)"
@@ -154,7 +158,18 @@ echo "===================="
 echo ""
 echo "Press Enter after the download completes to stop the server and clean up."
 if [ -r /dev/tty ] && [ -w /dev/tty ]; then
-  read _ </dev/tty || true
+  if read _ </dev/tty; then
+    :
+  else
+    echo "[INFO] No interactive terminal detected."
+    echo "[INFO] The HTTP server will keep running in the background."
+    echo "[INFO] Stop it later with:"
+    echo "       kill ${server_pid}"
+    echo "[INFO] Cleanup skipped so the download stays available."
+    stop_server_on_exit=0
+    cleanup_files_on_exit=0
+    KEEP_INSTALL=1
+  fi
 else
   echo "[INFO] No interactive terminal detected."
   echo "[INFO] The HTTP server will keep running in the background."
